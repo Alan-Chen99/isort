@@ -1890,3 +1890,96 @@ import_heading_thirdparty=external
     assert isort.code(code, config=settings) == isort.code(
         isort.code(code, config=settings), config=settings
     )
+
+
+def test_treat_comments_as_code_blank_lines_before_class_def():
+    """Ensure treat_all_comments_as_code inserts 2 blank lines before a comment attached to
+    a class/def (black convention).
+    """
+    # (1) Comment before class
+    assert isort.code(
+        "import os\n\n# comment\nclass Foo:\n    pass\n",
+        treat_all_comments_as_code=True,
+    ) == "import os\n\n\n# comment\nclass Foo:\n    pass\n"
+
+    # (2) Comment before def
+    assert isort.code(
+        "import os\n\n# comment\ndef foo():\n    pass\n",
+        treat_all_comments_as_code=True,
+    ) == "import os\n\n\n# comment\ndef foo():\n    pass\n"
+
+    # (3) Comment before @decorator
+    assert isort.code(
+        "import os\n\n# comment\n@decorator\ndef foo():\n    pass\n",
+        treat_all_comments_as_code=True,
+    ) == "import os\n\n\n# comment\n@decorator\ndef foo():\n    pass\n"
+
+    # (4) Detached comment (blank gap) -- should NOT add extra blank
+    assert isort.code(
+        "import os\n\n# comment\n\nclass Foo:\n    pass\n",
+        treat_all_comments_as_code=True,
+    ) == "import os\n\n# comment\n\nclass Foo:\n    pass\n"
+
+    # (5) Multiple contiguous comments before class
+    assert isort.code(
+        "import os\n\n# comment 1\n# comment 2\nclass Foo:\n    pass\n",
+        treat_all_comments_as_code=True,
+    ) == "import os\n\n\n# comment 1\n# comment 2\nclass Foo:\n    pass\n"
+
+    # (6) Comment before regular code (not class/def)
+    assert isort.code(
+        "import os\n\n# comment\nx = 1\n",
+        treat_all_comments_as_code=True,
+    ) == "import os\n\n# comment\nx = 1\n"
+
+    # (7) Without treat_all_comments_as_code (normal behavior -- comment absorbed into
+    # import section, class becomes next_construct, 2 blank lines from output.sorted_imports)
+    assert isort.code(
+        "import os\n\n# comment\nclass Foo:\n    pass\n",
+    ) == "import os\n\n\n# comment\nclass Foo:\n    pass\n"
+
+    # (8) Explicit lines_after_imports=1 should NOT be overridden
+    assert isort.code(
+        "import os\n\n# comment\nclass Foo:\n    pass\n",
+        treat_all_comments_as_code=True,
+        lines_after_imports=1,
+    ) == "import os\n\n# comment\nclass Foo:\n    pass\n"
+
+    # (9) treat_comments_as_code with specific comment
+    assert isort.code(
+        "import os\n\n# comment\nclass Foo:\n    pass\n",
+        treat_comments_as_code=["# comment"],
+    ) == "import os\n\n\n# comment\nclass Foo:\n    pass\n"
+
+    # (10) Comment before async def
+    assert isort.code(
+        "import os\n\n# comment\nasync def foo():\n    pass\n",
+        treat_all_comments_as_code=True,
+    ) == "import os\n\n\n# comment\nasync def foo():\n    pass\n"
+
+    # (11) Idempotency
+    first_pass = isort.code(
+        "import os\n\n# comment\nclass Foo:\n    pass\n",
+        treat_all_comments_as_code=True,
+    )
+    second_pass = isort.code(first_pass, treat_all_comments_as_code=True)
+    assert first_pass == second_pass
+
+    # (12) Black profile + treat_all_comments_as_code
+    assert isort.code(
+        "import os\n\n# comment\nclass Foo:\n    pass\n",
+        treat_all_comments_as_code=True,
+        profile="black",
+    ) == "import os\n\n\n# comment\nclass Foo:\n    pass\n"
+
+    # (13) Comment at end of file (no class/def after)
+    assert isort.code(
+        "import os\n\n# comment\n",
+        treat_all_comments_as_code=True,
+    ) == "import os\n\n# comment\n"
+
+    # (14) CRLF line endings
+    assert isort.code(
+        "import os\r\n\r\n# comment\r\nclass Foo:\r\n    pass\r\n",
+        treat_all_comments_as_code=True,
+    ) == "import os\r\n\r\n\r\n# comment\r\nclass Foo:\r\n    pass\r\n"

@@ -9,6 +9,7 @@ from isort.settings import DEFAULT_CONFIG, Config
 from . import output, parse
 from .exceptions import ExistingSyntaxErrors, FileSkipComment
 from .format import format_natural, remove_whitespace
+from .identify import STATEMENT_DECLARATIONS
 from .settings import FILE_SKIP_COMMENTS
 
 CIMPORT_IDENTIFIERS = ("cimport ", "cimport*", "from.cimport")
@@ -122,6 +123,12 @@ def process(
                 current += line or ""
 
         input_stream = StringIO(new_input)
+
+    # StringIO needed for tell()/seek() in peek-ahead; isinstance guard prevents double-wrap
+    if (config.treat_all_comments_as_code or config.treat_comments_as_code) and not isinstance(
+        input_stream, StringIO
+    ):
+        input_stream = StringIO(input_stream.read())
 
     for index, line in enumerate(chain(input_stream, (None,))):
         if line is None:
@@ -439,6 +446,33 @@ def process(
                                 + textwrap.indent(sorted_import_section, indent).strip()
                                 + trailing_whitespace
                             )
+
+                        if (
+                            config.lines_after_imports == -1
+                            and not indent
+                            and (config.treat_all_comments_as_code or config.treat_comments_as_code)
+                            and line.startswith("#")
+                        ):
+                            _saved_pos = input_stream.tell()
+                            _saw_blank = False
+                            _peek_line = line
+                            while _peek_line.startswith("#"):
+                                _peek_line = input_stream.readline()
+                            if _peek_line and not _peek_line.strip():
+                                _saw_blank = True
+                                while _peek_line and not _peek_line.strip():
+                                    _peek_line = input_stream.readline()
+                            input_stream.seek(_saved_pos)
+                            if not _saw_blank and _peek_line.startswith(STATEMENT_DECLARATIONS):
+                                one_blank = line_separator * 2 + line
+                                two_blanks = line_separator * 3 + line
+                                if (
+                                    one_blank in sorted_import_section
+                                    and two_blanks not in sorted_import_section
+                                ):
+                                    sorted_import_section = two_blanks.join(
+                                        sorted_import_section.rsplit(one_blank, 1)
+                                    )
 
                         made_changes = made_changes or _has_changed(
                             before=raw_import_section,
